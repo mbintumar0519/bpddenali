@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+@theme {
+  /* Warm ivory background, shifting toward pale lavender for section variety. */
+  --color-cream: #faf8f4;
+  --color-lavender-tint: #f2eef7;
+
+  /* Primary: deep muted indigo. Used for headings, dark feature sections, and brand/selected states — not buttons; see --color-action below. */
+  --color-indigo: #353b5e;
+  --color-indigo-deep: #262a45;
+
+  /* Secondary: dusty lavender. */
+  --color-lavender: #a99bbb;
+  --color-lavender-dark: #8b7ba0;
+
+  /* Accent: muted sage. */
+  --color-sage: #98aa9a;
+  --color-sage-tint: #eef2ee;
+  --color-sage-dark: #748577;
+
+  /* Warm accent: soft sand / peach. Used for tints, badges, and decoration only. */
+  --color-sand: #dfc4ad;
+  --color-sand-tint: #f8f0e7;
+  --color-sand-dark: #c19f80;
+
+  /*
+   * Conversion accent: a saturated warm terracotta, reserved exclusively for
+   * primary CTAs. Nothing else on the page is allowed to use it, so every
+   * appearance reads as "this is the thing to click" — the same principle
+   * that made the pre-redesign template convert, applied to this palette's
+   * warm family instead of an unrelated bright color.
+   */
+  --color-action: #c1603e;
+  --color-action-dark: #a14e30;
+
+  --color-ink: #252936;
+  --color-muted: #5c5f74;
+  --color-line: #e7e1d8;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  --shadow-panel: 0 28px 70px rgba(53, 59, 94, 0.14);
+  --shadow-card: 0 10px 32px rgba(53, 59, 94, 0.08);
+  --shadow-cta: 0 14px 30px rgba(193, 96, 62, 0.38);
+}
+
+@layer base {
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-indigo);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@utility container-page {
+  width: min(72.5rem, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+@media (min-width: 640px) {
+  .container-page {
+    width: min(72.5rem, calc(100% - 3rem));
+  }
+}
+
+/*
+ * Highlighter swash in the warm sand accent. `box-decoration-break: clone`
+ * keeps it looking hand-drawn when the phrase wraps, which it always does on
+ * phones.
+ */
+@utility highlight {
+  color: var(--color-indigo);
+  background-image: linear-gradient(
+    to top,
+    rgba(223, 196, 173, 0.55) 34%,
+    transparent 34%
+  );
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding-inline: 0.08em;
+}
+
+/*
+ * Subtle grain, applied as a pseudo-element so it never affects layout or
+ * interferes with a section's own background gradient beneath it.
+ */
+@utility grain {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  }
+}
+
+/* Sticky header gains depth only once the page has actually moved. */
+[data-scrolled] .site-header {
+  box-shadow: 0 10px 30px rgba(53, 59, 94, 0.1);
+}
+
+/* ------------------------------------------------------------ motion ---- */
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -22px, 0) scale(1.06);
+  }
+}
+
+@utility animate-step-in {
+  animation: step-in 0.3s ease both;
+}
+
+/* Hero content is above the fold, so it animates on load rather than on scroll. */
+@utility animate-rise {
+  animation: rise-in 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-drift {
+  animation: drift 13s ease-in-out infinite;
+}
+
+/*
+ * Reveal-on-scroll. Only hides once JS has confirmed it can reveal again, so a
+ * failed script can never leave the page blank. `--reveal-delay` lets a parent
+ * stagger its children without a keyframe per card.
+ */
+[data-reveal-ready] [data-reveal] {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+[data-reveal-ready] [data-reveal].is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  [data-reveal-ready] [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
