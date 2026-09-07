@@ -91,3 +91,4 @@ These are real, freely-licensed stock photos suitable to ship as-is, not
 placeholders — but confirm with sponsor/IRB before launch, since a licensed
 image bank (e.g. one the sponsor already pays for) may be preferred for a
 production clinical-trial site.
+# bpddenali
