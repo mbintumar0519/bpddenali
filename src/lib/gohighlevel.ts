@@ -38,7 +38,7 @@ export function buildGhlTags(input: {
 }): string[] {
   const tags = [
     "Website Lead",
-    "Bipolar Depression Screener",
+    "Bipolar Depression",
     `Study: ${input.studyId}`,
   ];
 
