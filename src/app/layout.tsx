@@ -45,12 +45,12 @@ export const viewport: Viewport = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const gtmId = (process.env.NEXT_PUBLIC_GTM_ID ?? "").trim();
+  const gtmId = (process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-5RKVR92C").trim();
   const gaId = (process.env.NEXT_PUBLIC_GA_ID ?? "").trim();
   const pixelId = (
     process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID ??
     process.env.NEXT_PUBLIC_META_PIXEL_ID ??
-    ""
+    "866847463060958"
   ).trim();
 
   return (
