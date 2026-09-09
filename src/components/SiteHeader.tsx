@@ -10,9 +10,9 @@ export function Brand({ onDark = false }: { onDark?: boolean }) {
     // landing page itself this resolves to a same-page anchor.
     <Link href="/#top" className="inline-flex items-center no-underline">
       <Image
-        src="/denali-health-plant-city.png"
+        src="/logo.png"
         alt={`${STUDY.siteName} — ${STUDY.city}`}
-        width={2725}
+        width={2724}
         height={838}
         priority={!onDark}
         // The lockup is navy-on-transparent, unreadable on the dark footer;
