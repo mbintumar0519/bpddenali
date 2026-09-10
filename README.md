@@ -19,7 +19,7 @@ npm run dev                  # http://localhost:3000
 | Script              | Purpose                            |
 | ------------------- | ---------------------------------- |
 | `npm run dev`       | Dev server                         |
-| `npm run build`     | Production build                   |
+| `npm run build`     | Production build (runs `prebuild` env validation first) |
 | `npm run start`     | Serve the production build         |
 | `npm run lint`      | ESLint                             |
 | `npm run typecheck` | `tsc --noEmit`                     |
