@@ -50,13 +50,12 @@ of sync with approved materials.
    **callback priority only** — the visitor is never told they do or do not
    qualify, and study staff confirm every requirement.
 3. On submit, `POST /api/lead` re-validates server-side, applies a honeypot,
-   a submit-timing check, and a per-IP rate limit, then forwards to
-   `GHL_WEBHOOK_URL`.
-
-`GHL_WEBHOOK_URL` is **server-only** on purpose — the endpoint that creates CRM
-records must never be reachable from the browser. If it is unset (local dev,
-pre-launch), the API logs a warning and still returns success so the thank-you
-screen renders.
+   a submit-timing check, and a per-IP rate limit, then creates the contact in
+   GoHighLevel (`GOHIGHLEVEL_API_KEY` + `GOHIGHLEVEL_LOCATION_ID`, server-only
+   so the keys never reach the browser) and appends a screener note with every
+   answer. If the keys are unset, the API returns an error telling the visitor
+   to call instead — check `GET /api/lead` (`ghlConfigured`) when leads stop
+   arriving; missing env vars on the host are the usual cause.
 
 Attribution (UTMs, `gclid`, `fbclid`, referrer) is captured on first touch and
 persisted in `sessionStorage`, so a lead submitted on a later visit still
@@ -76,8 +75,10 @@ Events emitted: `prescreen_started`, `prescreen_abandoned`, `prescreen_submitted
       for verified, IRB-approved patient reviews
 - [ ] Build out `/privacy` and `/terms` (footer links to them now; pages don't
       exist yet)
-- [ ] Set `GOHIGHLEVEL_API_KEY` / `GOHIGHLEVEL_LOCATION_ID` and verify a test
-      lead lands in the CRM
+ - [ ] Set `GOHIGHLEVEL_API_KEY` / `GOHIGHLEVEL_LOCATION_ID` **both locally
+       and in the Netlify site settings (Site settings → Environment
+       variables)** and verify a test lead lands in the CRM. Confirm with
+       `curl https://<site>/api/lead` → `{ "ghlConfigured": true }`.
 - [ ] Set `NEXT_PUBLIC_SITE_URL` so canonical/OG URLs resolve
 
 ## Design notes
