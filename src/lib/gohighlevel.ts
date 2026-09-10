@@ -5,6 +5,8 @@ export type GhlContactPayload = {
   lastName: string;
   email: string;
   phone: string;
+  /** Native GHL contact field — always stored, unlike custom fields. */
+  postalCode?: string;
   tags?: string[];
   source?: string;
   customField?: Record<string, string>;
@@ -85,12 +87,13 @@ export async function createGhlContact(
 ): Promise<GhlCreateResult> {
   const { apiKey, locationId } = getGhlConfig();
 
-  const body = {
+  const body: Record<string, unknown> = {
     firstName: payload.firstName,
     lastName: payload.lastName,
     name: `${payload.firstName} ${payload.lastName}`.trim(),
     email: payload.email,
     phone: payload.phone,
+    ...(payload.postalCode ? { postalCode: payload.postalCode } : {}),
     locationId,
     tags: payload.tags ?? ["Website Lead"],
     source: payload.source ?? "Website Form",
@@ -98,6 +101,28 @@ export async function createGhlContact(
       ? { customField: payload.customField }
       : {}),
   };
+
+  try {
+    return await postGhlContact(apiKey, body);
+  } catch (error) {
+    // GHL rejects the whole create when a custom field is invalid for the
+    // location. Never lose the lead over that — retry as a plain contact
+    // (the screener note added afterwards still carries every answer).
+    if (body.customField) {
+      console.warn("[GHL] create with customField failed, retrying bare", error);
+      const { customField: _dropped, ...bareBody } = body;
+      void _dropped;
+      return await postGhlContact(apiKey, bareBody);
+    }
+    throw error;
+  }
+}
+
+async function postGhlContact(
+  apiKey: string,
+  body: Record<string, unknown>,
+): Promise<GhlCreateResult> {
+  const locationId = body.locationId as string;
 
   const res = await fetch(`${GHL_V1_BASE}/contacts/`, {
     method: "POST",

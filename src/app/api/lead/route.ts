@@ -203,7 +203,9 @@ export async function POST(request: NextRequest) {
     diagnosis_type: answers.diagnosisType,
     on_medication: answers.onMedication,
     zip: answers.zip,
-    contact_preference: answers.contactPreference,
+    // Key must match the existing GHL "Preferred Contact" field
+    // (contact.preferred_contact) or GHL silently drops the value.
+    preferred_contact: answers.contactPreference,
     prescreen_status: result.status,
     lead_source: leadSource,
     utm_source,
@@ -225,6 +227,9 @@ export async function POST(request: NextRequest) {
       lastName,
       email,
       phone,
+      // ZIP as a native GHL field so it is always stored even when no
+      // matching custom field exists in the location.
+      postalCode: zip,
       tags,
       source: `Website — ${STUDY.protocol}`,
       customField,
@@ -282,4 +287,26 @@ export async function POST(request: NextRequest) {
   );
 
   return NextResponse.json({ ok: true, forwarded: true });
+}
+
+/**
+ * Diagnostics for "no leads in GHL" triage. Reports whether the server can
+ * reach GHL — never secret values. `curl https://<site>/api/lead`:
+ * `{ "ghlConfigured": false }` means the Netlify/site env vars are missing,
+ * which is the #1 reason leads silently never arrive.
+ */
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    ghlConfigured: Boolean(
+      process.env.GOHIGHLEVEL_API_KEY?.trim() &&
+        process.env.GOHIGHLEVEL_LOCATION_ID?.trim(),
+    ),
+    metaCapiConfigured: Boolean(
+      (process.env.FACEBOOK_PIXEL_ID?.trim() ||
+        process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID?.trim()) &&
+        process.env.FACEBOOK_ACCESS_TOKEN?.trim(),
+    ),
+    time: new Date().toISOString(),
+  });
 }
