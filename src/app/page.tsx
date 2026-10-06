@@ -1,6 +1,7 @@
 import Enhancements from "@/components/Enhancements";
 import Hero from "@/components/Hero";
 import MobileCta from "@/components/MobileCta";
+import { ReferralBanner } from "@/components/ReferralBanner";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import {
@@ -81,6 +82,7 @@ export default function Home() {
 
       <main id="top">
         <Hero />
+        <ReferralBanner />
         <Testimonials />
         <MeetTheDoctor />
         <VisualBreak />

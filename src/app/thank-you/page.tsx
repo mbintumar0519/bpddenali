@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import SiteFooter from "@/components/SiteFooter";
 import ThankYouTracking from "@/components/ThankYouTracking";
+import { ReferralBanner } from "@/components/ReferralBanner";
 import { Brand } from "@/components/SiteHeader";
 import { LinkButton } from "@/components/ui";
 import { STUDY } from "@/lib/study";
@@ -90,6 +91,10 @@ export default function ThankYouPage() {
               </li>
             ))}
           </ol>
+
+          <div className="mx-auto mt-9 max-w-2xl sm:mt-12">
+            <ReferralBanner layout="stack" />
+          </div>
 
           <div className="mx-auto mt-9 max-w-2xl rounded-2xl border border-line bg-white p-5 shadow-card sm:mt-12 sm:rounded-3xl sm:p-6">
             <div className="flex flex-col gap-2.5 sm:flex-row">
