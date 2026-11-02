@@ -1,6 +1,5 @@
-const GHL_V1_BASE = "https://rest.gohighlevel.com/v1";
 const GHL_V2_BASE = "https://services.leadconnectorhq.com";
-const GHL_API_VERSION = "2021-07-28";
+const GHL_API_VERSION = "v3";
 
 export type GhlContactPayload = {
   firstName: string;
@@ -37,17 +36,22 @@ function getGhlConfig() {
     process.env.GHL_LOCATION_ID ||
     ""
   ).trim();
-  if (!apiKey) throw new Error("GOHIGHLEVEL_API_KEY is not configured");
-  // Private Integration Tokens (pit-...) are the only credentials accepted by
-  // the v2 API. Legacy location API keys (eyJ...) still work on v1 until the
-  // November 30, 2026 shutdown, so we keep both engines during the migration.
-  const isV2 = apiKey.startsWith("pit-") || apiKey.startsWith("pit_");
-  // v1 keys are already scoped to a location, so a location id is only
-  // mandatory on the v2 engine.
-  if (isV2 && !locationId) {
+
+  if (!apiKey) {
+    throw new Error("GOHIGHLEVEL_API_KEY is not configured");
+  }
+
+  if (apiKey.startsWith("eyJ")) {
+    throw new Error(
+      "GoHighLevel v1 API keys are no longer supported. Please configure a Private Integration Token (PIT starting with 'pit-') in GOHIGHLEVEL_API_KEY.",
+    );
+  }
+
+  if (!locationId) {
     throw new Error("GOHIGHLEVEL_LOCATION_ID is not configured");
   }
-  return { apiKey, locationId, isV2 };
+
+  return { apiKey, locationId };
 }
 
 /** Normalise US phone numbers to E.164, which v2 requires. */
@@ -373,99 +377,21 @@ async function postV2Contact(apiKey: string, body: Record<string, unknown>) {
   return raw;
 }
 
-async function postV1Contact(
-  apiKey: string,
-  body: Record<string, unknown>,
-): Promise<GhlCreateResult> {
-  const locationId = body.locationId as string;
-
-  const res = await fetch(`${GHL_V1_BASE}/contacts/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const text = await res.text();
-  let raw: any = text;
-  try {
-    raw = text ? JSON.parse(text) : null;
-  } catch {
-    /* keep raw text */
-  }
-
-  if (!res.ok) {
-    console.error("[GHL v1] create contact failed", res.status, text);
-    throw new Error(`GoHighLevel v1 error ${res.status}: ${text}`);
-  }
-
-  const contactId = raw?.contact?.id ?? raw?.id;
-  console.log("[GHL v1] contact created", { contactId, locationId });
-  return { ok: true, contactId, locationId, raw };
-}
-
 export async function createGhlContact(
   payload: GhlContactPayload,
 ): Promise<GhlCreateResult> {
-  const { apiKey, locationId, isV2 } = getGhlConfig();
+  const { apiKey, locationId } = getGhlConfig();
   const phone = normalizeGhlPhone(payload.phone);
   const firstName = payload.firstName || "";
   const lastName = payload.lastName || "";
 
-  if (isV2) {
-    const baseFieldMap = STATIC_FIELD_MAP_BY_LOCATION[locationId] || STATIC_FIELD_MAP_BY_LOCATION.I4ssFJs4dGWefTWWITaE || {};
-    const liveFieldMap = payload.customField ? await fetchGhlFieldMapV2(apiKey, locationId) : {};
-    const fieldMap = { ...baseFieldMap, ...liveFieldMap };
-    const customFields = resolveV2CustomFields(payload.customField, fieldMap);
+  const baseFieldMap = STATIC_FIELD_MAP_BY_LOCATION[locationId] || STATIC_FIELD_MAP_BY_LOCATION.I4ssFJs4KWSJJAYXITaE || {};
+  const liveFieldMap = payload.customField ? await fetchGhlFieldMapV2(apiKey, locationId) : {};
+  const fieldMap = { ...baseFieldMap, ...liveFieldMap };
+  const customFields = resolveV2CustomFields(payload.customField, fieldMap);
 
-    const body: Record<string, unknown> = {
-      locationId,
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`.trim(),
-      email: payload.email,
-      ...(phone ? { phone } : {}),
-      ...(payload.postalCode ? { postalCode: payload.postalCode } : {}),
-      ...(payload.city ? { city: payload.city } : {}),
-      ...(payload.state ? { state: payload.state } : {}),
-      ...(payload.country ? { country: payload.country } : {}),
-      tags: payload.tags ?? ["Website Lead"],
-      source: payload.source ?? "Website Form",
-      ...(payload.companyName ? { companyName: payload.companyName } : {}),
-      ...(customFields.length ? { customFields } : {}),
-    };
-
-    let raw: any;
-    try {
-      raw = await postV2Contact(apiKey, body);
-    } catch (error) {
-      if (body.customFields) {
-        // Never lose a lead over a stale/missing custom field definition.
-        console.warn("[GHL v2] Retrying without custom fields", error);
-        const { customFields: _dropped, ...bareBody } = body;
-        void _dropped;
-        raw = await postV2Contact(apiKey, bareBody);
-      } else {
-        throw error;
-      }
-    }
-
-    const contactId = raw?.contact?.id || raw?.id;
-    console.log("[GHL v2] contact upserted", { contactId, locationId });
-    return { ok: true, contactId, locationId, raw };
-  }
-
-  // ---------------------------------------------------------------------
-  // Legacy v1 engine (location API key). Kept only as a bridge until every
-  // deployment is switched to a Private Integration Token before 2026-11-30.
-  // ---------------------------------------------------------------------
-  console.warn(
-    "[GHL v1] Running on a legacy API key. HighLevel shuts down v1 on Nov 30, 2026 - generate a Private Integration Token (pit-...) in GHL Settings.",
-  );
-
-  const v1Body: Record<string, unknown> = {
+  const body: Record<string, unknown> = {
+    locationId,
     firstName,
     lastName,
     name: `${firstName} ${lastName}`.trim(),
@@ -475,46 +401,44 @@ export async function createGhlContact(
     ...(payload.city ? { city: payload.city } : {}),
     ...(payload.state ? { state: payload.state } : {}),
     ...(payload.country ? { country: payload.country } : {}),
-    ...(locationId ? { locationId } : {}),
     tags: payload.tags ?? ["Website Lead"],
     source: payload.source ?? "Website Form",
     ...(payload.companyName ? { companyName: payload.companyName } : {}),
-    ...(payload.customField && Object.keys(payload.customField).length > 0
-      ? { customField: payload.customField }
-      : {}),
+    ...(customFields.length ? { customFields } : {}),
   };
 
+  let raw: any;
   try {
-    return await postV1Contact(apiKey, v1Body);
+    raw = await postV2Contact(apiKey, body);
   } catch (error) {
-    // GHL rejects the whole create when a custom field key is invalid for the
-    // location. Never lose the lead over that - retry as a plain contact.
-    if (v1Body.customField) {
-      console.warn("[GHL v1] create with customField failed, retrying bare", error);
-      const { customField: _dropped, ...bareBody } = v1Body;
+    if (body.customFields) {
+      // Never lose a lead over a stale/missing custom field definition.
+      console.warn("[GHL v2] Retrying without custom fields", error);
+      const { customFields: _dropped, ...bareBody } = body;
       void _dropped;
-      return await postV1Contact(apiKey, bareBody);
+      raw = await postV2Contact(apiKey, bareBody);
+    } else {
+      throw error;
     }
-    throw error;
   }
+
+  const contactId = raw?.contact?.id || raw?.id;
+  console.log("[GHL v2] contact upserted", { contactId, locationId });
+  return { ok: true, contactId, locationId, raw };
 }
 
 export async function addGhlNote(contactId: string, body: string): Promise<void> {
   if (!contactId || !body.trim()) return;
-  const { apiKey, isV2 } = getGhlConfig();
+  const { apiKey } = getGhlConfig();
 
-  const url = isV2
-    ? `${GHL_V2_BASE}/contacts/${contactId}/notes`
-    : `${GHL_V1_BASE}/contacts/${contactId}/notes/`;
+  const url = `${GHL_V2_BASE}/contacts/${contactId}/notes`;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
+    Version: GHL_API_VERSION,
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
-  if (isV2) {
-    headers.Version = GHL_API_VERSION;
-    headers.Accept = "application/json";
-  }
 
   try {
     const res = await fetch(url, {
@@ -523,17 +447,11 @@ export async function addGhlNote(contactId: string, body: string): Promise<void>
       body: JSON.stringify({ body }),
     });
     if (!res.ok) {
-      console.warn(
-        `[GHL ${isV2 ? "v2" : "v1"}] note create failed`,
-        res.status,
-        await res.text(),
-      );
+      console.warn("[GHL v2] note create failed", res.status, await res.text());
     } else {
-      console.log(
-        `[GHL ${isV2 ? "v2" : "v1"}] note attached to ${contactId}`,
-      );
+      console.log(`[GHL v2] note attached to ${contactId}`);
     }
   } catch (error) {
-    console.warn(`[GHL ${isV2 ? "v2" : "v1"}] note create error`, error);
+    console.warn("[GHL v2] note create error", error);
   }
 }
