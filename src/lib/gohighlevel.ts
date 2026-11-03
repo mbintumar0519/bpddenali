@@ -1,4 +1,4 @@
-const GHL_V2_BASE = "https://services.leadconnectorhq.com";
+const GHL_API_BASE = "https://services.leadconnectorhq.com";
 const GHL_API_VERSION = "v3";
 
 export type GhlContactPayload = {
@@ -145,7 +145,7 @@ async function fetchGhlFieldMapV2(
 
   try {
     const res = await fetch(
-      `${GHL_V2_BASE}/locations/${locationId}/customFields?model=contact`,
+      `${GHL_API_BASE}/locations/${locationId}/customFields?model=contact`,
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -156,7 +156,7 @@ async function fetchGhlFieldMapV2(
     );
     if (!res.ok) {
       console.warn(
-        "[GHL v2] Failed to fetch custom fields",
+        "[GHL v3] Failed to fetch custom fields",
         res.status,
         await res.text(),
       );
@@ -181,10 +181,10 @@ async function fetchGhlFieldMapV2(
     _ghlFieldMapCache = map;
     _ghlFieldMapCacheKey = cacheKey;
     _ghlFieldMapCacheTime = now;
-    console.log(`[GHL v2] Custom field map loaded: ${Object.keys(map).length} fields`);
+    console.log(`[GHL v3] Custom field map loaded: ${Object.keys(map).length} fields`);
     return map;
   } catch (error) {
-    console.warn("[GHL v2] Failed to fetch custom fields", error);
+    console.warn("[GHL v3] Failed to fetch custom fields", error);
     return _ghlFieldMapCache && _ghlFieldMapCacheKey === cacheKey
       ? _ghlFieldMapCache
       : {};
@@ -342,7 +342,7 @@ function resolveV2CustomFields(
       fieldMap[key.replace(/^contact\./, "")] ||
       (/^[a-zA-Z0-9]{20,}$/.test(key) ? key : "");
     if (!id) {
-      console.warn(`[GHL v2] Custom field not found, skipping: "${key}"`);
+      console.warn(`[GHL v3] Custom field not found, skipping: "${key}"`);
       continue;
     }
     fields.push({ id, value: String(value) });
@@ -351,7 +351,7 @@ function resolveV2CustomFields(
 }
 
 async function postV2Contact(apiKey: string, body: Record<string, unknown>) {
-  const res = await fetch(`${GHL_V2_BASE}/contacts/upsert`, {
+  const res = await fetch(`${GHL_API_BASE}/contacts/upsert`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -371,7 +371,7 @@ async function postV2Contact(apiKey: string, body: Record<string, unknown>) {
   }
 
   if (!res.ok) {
-    console.error("[GHL v2] contact upsert failed", res.status, text);
+    console.error("[GHL v3] contact upsert failed", res.status, text);
     throw new Error(`GoHighLevel v2 error ${res.status}: ${text}`);
   }
   return raw;
@@ -413,7 +413,7 @@ export async function createGhlContact(
   } catch (error) {
     if (body.customFields) {
       // Never lose a lead over a stale/missing custom field definition.
-      console.warn("[GHL v2] Retrying without custom fields", error);
+      console.warn("[GHL v3] Retrying without custom fields", error);
       const { customFields: _dropped, ...bareBody } = body;
       void _dropped;
       raw = await postV2Contact(apiKey, bareBody);
@@ -423,7 +423,7 @@ export async function createGhlContact(
   }
 
   const contactId = raw?.contact?.id || raw?.id;
-  console.log("[GHL v2] contact upserted", { contactId, locationId });
+  console.log("[GHL v3] contact upserted", { contactId, locationId });
   return { ok: true, contactId, locationId, raw };
 }
 
@@ -431,7 +431,7 @@ export async function addGhlNote(contactId: string, body: string): Promise<void>
   if (!contactId || !body.trim()) return;
   const { apiKey } = getGhlConfig();
 
-  const url = `${GHL_V2_BASE}/contacts/${contactId}/notes`;
+  const url = `${GHL_API_BASE}/contacts/${contactId}/notes`;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
@@ -447,11 +447,11 @@ export async function addGhlNote(contactId: string, body: string): Promise<void>
       body: JSON.stringify({ body }),
     });
     if (!res.ok) {
-      console.warn("[GHL v2] note create failed", res.status, await res.text());
+      console.warn("[GHL v3] note create failed", res.status, await res.text());
     } else {
-      console.log(`[GHL v2] note attached to ${contactId}`);
+      console.log(`[GHL v3] note attached to ${contactId}`);
     }
   } catch (error) {
-    console.warn("[GHL v2] note create error", error);
+    console.warn("[GHL v3] note create error", error);
   }
 }
