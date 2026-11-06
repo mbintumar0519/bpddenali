@@ -363,7 +363,7 @@ async function postV2Contact(apiKey: string, body: Record<string, unknown>) {
   });
 
   const text = await res.text();
-  let raw: any = text;
+  let raw: unknown = text;
   try {
     raw = text ? JSON.parse(text) : null;
   } catch {
@@ -407,16 +407,16 @@ export async function createGhlContact(
     ...(customFields.length ? { customFields } : {}),
   };
 
-  let raw: any;
+  let raw: { contact?: { id?: string }; id?: string; [key: string]: unknown } | undefined;
   try {
-    raw = await postV2Contact(apiKey, body);
+    raw = (await postV2Contact(apiKey, body)) as typeof raw;
   } catch (error) {
     if (body.customFields) {
       // Never lose a lead over a stale/missing custom field definition.
       console.warn("[GHL v3] Retrying without custom fields", error);
       const { customFields: _dropped, ...bareBody } = body;
       void _dropped;
-      raw = await postV2Contact(apiKey, bareBody);
+      raw = (await postV2Contact(apiKey, bareBody)) as typeof raw;
     } else {
       throw error;
     }

@@ -30,6 +30,49 @@ const FIELD_CLASS =
 
 const LABEL_CLASS = "mb-2 block text-[15px] font-bold leading-snug text-indigo sm:text-base";
 
+function UsFlag({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 16"
+      width="24"
+      height="16"
+      aria-hidden="true"
+    >
+      <defs>
+        <clipPath id="us-flag-shape">
+          <rect width="24" height="16" rx="2" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#us-flag-shape)">
+        <rect width="24" height="16" fill="#b22234" />
+        <path
+          d="M0 2.46h24M0 4.92h24M0 7.38h24M0 9.85h24M0 12.31h24M0 14.77h24"
+          stroke="#fff"
+          strokeWidth="1.23"
+        />
+        <rect width="10" height="8.62" fill="#3c3b6e" />
+        <g fill="#fff" opacity="0.95">
+          <circle cx="2" cy="1.6" r="0.6" />
+          <circle cx="4" cy="1.6" r="0.6" />
+          <circle cx="6" cy="1.6" r="0.6" />
+          <circle cx="8" cy="1.6" r="0.6" />
+          <circle cx="3" cy="3.2" r="0.6" />
+          <circle cx="5" cy="3.2" r="0.6" />
+          <circle cx="7" cy="3.2" r="0.6" />
+          <circle cx="2" cy="4.8" r="0.6" />
+          <circle cx="4" cy="4.8" r="0.6" />
+          <circle cx="6" cy="4.8" r="0.6" />
+          <circle cx="8" cy="4.8" r="0.6" />
+          <circle cx="3" cy="6.4" r="0.6" />
+          <circle cx="5" cy="6.4" r="0.6" />
+          <circle cx="7" cy="6.4" r="0.6" />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
@@ -438,25 +481,54 @@ export default function PrescreenForm() {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className={LABEL_CLASS} htmlFor={`${uid}-phone`}>
-                  Phone number
-                </label>
+            <div className="mt-3">
+              <label className={LABEL_CLASS} htmlFor={`${uid}-phone`}>
+                Mobile Phone <span className="text-[#b42318]">*</span>
+              </label>
+              <div
+                className={cn(
+                  "flex w-full min-h-[3.25rem] items-center rounded-xl border border-[#cddbe4] bg-white transition focus-within:border-accent focus-within:shadow-[0_0_0_4px_rgba(255,122,24,.14)]",
+                  errors.phone &&
+                    "border-[#b42318] focus-within:border-[#b42318] focus-within:shadow-[0_0_0_4px_rgba(180,35,24,.14)]",
+                )}
+              >
+                <div
+                  className="flex shrink-0 select-none items-center gap-2 border-r border-[#cddbe4] px-3.5 py-2.5 text-base font-semibold text-navy sm:text-[17px]"
+                  aria-hidden="true"
+                >
+                  <UsFlag className="h-4 w-6 shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]" />
+                  <span className="font-bold text-navy">+1</span>
+                  <svg
+                    className="size-3.5 text-navy/60"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </div>
                 <input
                   id={`${uid}-phone`}
-                  className={FIELD_CLASS}
+                  className="w-full flex-1 bg-transparent px-4 py-2.5 text-base text-ink outline-none placeholder:text-[#94a3b8] sm:text-[17px]"
                   type="tel"
-                  autoComplete="tel"
+                  autoComplete="tel-national"
                   inputMode="tel"
-                  placeholder="(404) 555-0123"
+                  placeholder="(813) 555-0123"
                   value={answers.phone}
                   aria-invalid={errors.phone ? true : undefined}
                   aria-describedby={errors.phone ? `${uid}-phone-error` : undefined}
                   onChange={(e) => set("phone", formatPhone(e.target.value))}
                 />
-                <FieldError id={`${uid}-phone-error`} message={errors.phone} />
               </div>
+              <FieldError id={`${uid}-phone-error`} message={errors.phone} />
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <label className={LABEL_CLASS} htmlFor={`${uid}-zip`}>
                   ZIP code
@@ -474,23 +546,22 @@ export default function PrescreenForm() {
                 />
                 <FieldError id={`${uid}-zip-error`} message={errors.zip} />
               </div>
-            </div>
-
-            <div className="mt-3">
-              <label className={LABEL_CLASS} htmlFor={`${uid}-email`}>
-                Email
-              </label>
-              <input
-                id={`${uid}-email`}
-                className={FIELD_CLASS}
-                type="email"
-                autoComplete="email"
-                value={answers.email}
-                aria-invalid={errors.email ? true : undefined}
-                aria-describedby={errors.email ? `${uid}-email-error` : undefined}
-                onChange={(e) => set("email", e.target.value)}
-              />
-              <FieldError id={`${uid}-email-error`} message={errors.email} />
+              <div>
+                <label className={LABEL_CLASS} htmlFor={`${uid}-email`}>
+                  Email
+                </label>
+                <input
+                  id={`${uid}-email`}
+                  className={FIELD_CLASS}
+                  type="email"
+                  autoComplete="email"
+                  value={answers.email}
+                  aria-invalid={errors.email ? true : undefined}
+                  aria-describedby={errors.email ? `${uid}-email-error` : undefined}
+                  onChange={(e) => set("email", e.target.value)}
+                />
+                <FieldError id={`${uid}-email-error`} message={errors.email} />
+              </div>
             </div>
 
             <div className="mt-3">

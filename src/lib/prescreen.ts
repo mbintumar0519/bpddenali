@@ -87,8 +87,11 @@ export function triage(answers: PrescreenAnswers): TriageResult {
 
 /** Digits-only US phone check; formatting and country code are tolerated. */
 export function isValidPhone(value: string): boolean {
-  const digits = value.replace(/\D/g, "");
-  return digits.length === 10 || (digits.length === 11 && digits.startsWith("1"));
+  let digits = value.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  }
+  return digits.length === 10 && /^[2-9]/.test(digits);
 }
 
 export function isValidEmail(value: string): boolean {
@@ -99,9 +102,21 @@ export function isValidZip(value: string): boolean {
   return /^\d{5}$/.test(value.trim());
 }
 
-/** Progressive `(404) 999-2734` formatting as the user types. */
+/**
+ * Progressive phone formatting as the user types or pastes.
+ * Tolerates US country code (+1 or leading 1) without dropping the final digit.
+ * Output: `(404) 999-2734`
+ */
 export function formatPhone(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 10);
+  let digits = value.replace(/\D/g, "");
+
+  // If user pasted or autofilled with leading US country code 1 (11+ digits), strip the 1
+  if (digits.startsWith("1") && digits.length >= 11) {
+    digits = digits.slice(1, 11);
+  } else {
+    digits = digits.slice(0, 10);
+  }
+
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
