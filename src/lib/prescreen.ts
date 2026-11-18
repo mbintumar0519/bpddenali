@@ -1,3 +1,5 @@
+import { formatUsPhone, isValidUsPhone } from "./usPhone";
+
 /**
  * Pre-screen data model and eligibility triage.
  *
@@ -85,13 +87,9 @@ export function triage(answers: PrescreenAnswers): TriageResult {
   return { status: "review", message: CLOSE_MATCH_MESSAGE };
 }
 
-/** Digits-only US phone check; formatting and country code are tolerated. */
+/** Strict US (NANP) phone check; formatting and country code are tolerated. */
 export function isValidPhone(value: string): boolean {
-  let digits = value.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) {
-    digits = digits.slice(1);
-  }
-  return digits.length === 10 && /^[2-9]/.test(digits);
+  return isValidUsPhone(value);
 }
 
 export function isValidEmail(value: string): boolean {
@@ -108,18 +106,7 @@ export function isValidZip(value: string): boolean {
  * Output: `(404) 999-2734`
  */
 export function formatPhone(value: string): string {
-  let digits = value.replace(/\D/g, "");
-
-  // If user pasted or autofilled with leading US country code 1 (11+ digits), strip the 1
-  if (digits.startsWith("1") && digits.length >= 11) {
-    digits = digits.slice(1, 11);
-  } else {
-    digits = digits.slice(0, 10);
-  }
-
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return formatUsPhone(value);
 }
 
 export type FormErrors = Partial<Record<keyof PrescreenAnswers, string>>;
