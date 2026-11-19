@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { formatUsPhone, isValidUsPhone } from "./usPhone";
 
 /**
@@ -92,12 +93,26 @@ export function isValidPhone(value: string): boolean {
   return isValidUsPhone(value);
 }
 
-export function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+export const NAME_MAX = 50;
+export const EMAIL_MAX = 254;
+
+/** Letters in any language (José, Nguyễn), with inner spaces, ' - . */
+const NAME_PATTERN = /^\p{L}[\p{L}\p{M}' .-]*$/u;
+
+export function isValidName(value: string): boolean {
+  const v = value.trim();
+  return v.length >= 2 && v.length <= NAME_MAX && NAME_PATTERN.test(v);
 }
 
+export function isValidEmail(value: string): boolean {
+  const v = value.trim();
+  return v.length <= EMAIL_MAX && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+}
+
+/** 5-digit US ZIP; 00000 is not a real ZIP code. */
 export function isValidZip(value: string): boolean {
-  return /^\d{5}$/.test(value.trim());
+  const v = value.trim();
+  return /^\d{5}$/.test(v) && v !== "00000";
 }
 
 /**
@@ -113,38 +128,70 @@ export type FormErrors = Partial<Record<keyof PrescreenAnswers, string>>;
 
 const CHOICE_ERROR = "Please choose an option.";
 
+/** A chip question: "" is the unanswered starting value. */
+const choice = <const T extends readonly [string, ...string[]]>(values: T) =>
+  z
+    .enum([...values, ""] as [...T, ""], { error: CHOICE_ERROR })
+    .refine((v) => v !== "", CHOICE_ERROR);
+
 /**
- * The form is a single scrollable list rather than a step wizard, so every
- * field is validated together on submit.
+ * Required text: an empty value gets `emptyMessage`; a filled but invalid
+ * value gets `invalidMessage`. The invalid check skips empty values, so each
+ * field reports exactly one clear message.
  */
+const requiredText = (
+  emptyMessage: string,
+  isValid: (v: string) => boolean,
+  invalidMessage: string,
+) =>
+  z
+    .string({ error: emptyMessage })
+    .trim()
+    .min(1, emptyMessage)
+    .refine((v) => v === "" || isValid(v), invalidMessage);
+
+const nameField = (emptyMessage: string, label: string) =>
+  requiredText(
+    emptyMessage,
+    isValidName,
+    `Enter a valid ${label} (letters only, 2–${NAME_MAX} characters).`,
+  );
+
+/**
+ * Single source of truth for the pre-screen form (react-hook-form +
+ * zodResolver). The form is one scrollable list rather than a step wizard,
+ * so every field is validated together on submit.
+ */
+export const prescreenSchema = z.object({
+  ageRange: choice(["18-24", "25-34", "35-44", "45-54", "55-64", "65+"]),
+  bipolarDiagnosis: choice(["yes", "no", "unsure"]),
+  diagnosisType: choice(["bipolar-1", "bipolar-2", "unsure"]),
+  onMedication: choice(["yes", "no", "unsure"]),
+  firstName: nameField("Enter your first name.", "first name"),
+  lastName: nameField("Enter your last name.", "last name"),
+  phone: requiredText(
+    "Enter a phone number we can reach you at.",
+    isValidPhone,
+    "Enter a 10-digit US phone number.",
+  ),
+  email: requiredText("Enter your email address.", isValidEmail, "Enter a valid email address."),
+  zip: requiredText("Enter your ZIP code.", isValidZip, "Enter a valid 5-digit ZIP code."),
+  contactPreference: z.enum(["Text me", "Call me"], { error: CHOICE_ERROR }),
+  consentToContact: z
+    .boolean({ error: "Please agree to be contacted so we can follow up." })
+    .refine((v) => v, "Please agree to be contacted so we can follow up."),
+});
+
+export type PrescreenInput = z.input<typeof prescreenSchema>;
+
+/** Plain-function validation (same rules as the schema), first error per field. */
 export function validateAnswers(a: PrescreenAnswers): FormErrors {
+  const result = prescreenSchema.safeParse(a);
+  if (result.success) return {};
   const errors: FormErrors = {};
-
-  if (!a.ageRange) errors.ageRange = CHOICE_ERROR;
-  if (!a.bipolarDiagnosis) errors.bipolarDiagnosis = CHOICE_ERROR;
-  if (!a.diagnosisType) errors.diagnosisType = CHOICE_ERROR;
-  if (!a.onMedication) errors.onMedication = CHOICE_ERROR;
-
-  if (!a.firstName.trim()) errors.firstName = "Enter your first name.";
-  if (!a.lastName.trim()) errors.lastName = "Enter your last name.";
-  if (!a.phone.trim()) {
-    errors.phone = "Enter a phone number we can reach you at.";
-  } else if (!isValidPhone(a.phone)) {
-    errors.phone = "Enter a 10-digit US phone number.";
+  for (const issue of result.error.issues) {
+    const key = issue.path[0] as keyof PrescreenAnswers;
+    if (!errors[key]) errors[key] = issue.message;
   }
-  if (!a.email.trim()) {
-    errors.email = "Enter your email address.";
-  } else if (!isValidEmail(a.email)) {
-    errors.email = "Enter a valid email address.";
-  }
-  if (!a.zip.trim()) {
-    errors.zip = "Enter your ZIP code.";
-  } else if (!isValidZip(a.zip)) {
-    errors.zip = "Enter a 5-digit ZIP code.";
-  }
-  if (!a.consentToContact) {
-    errors.consentToContact = "Please agree to be contacted so we can follow up.";
-  }
-
   return errors;
 }

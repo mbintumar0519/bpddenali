@@ -1,18 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 import {
+  EMAIL_MAX,
   EMPTY_ANSWERS,
+  NAME_MAX,
   formatPhone,
+  prescreenSchema,
   triage,
-  validateAnswers,
   type AgeBand,
   type ContactPreference,
   type DiagnosisType,
-  type FormErrors,
   type PrescreenAnswers,
+  type PrescreenInput,
   type YesNoUnsure,
 } from "@/lib/prescreen";
 import { STUDY } from "@/lib/study";
@@ -148,6 +152,28 @@ const RESUME_FIELDS = ["ageRange", "bipolarDiagnosis", "diagnosisType", "onMedic
 
 const SCREENING_FIELDS = RESUME_FIELDS;
 
+/** Fields in the order they appear on screen (first error gets focus). */
+const FIELD_ORDER: (keyof PrescreenAnswers)[] = [
+  "ageRange",
+  "bipolarDiagnosis",
+  "diagnosisType",
+  "onMedication",
+  "firstName",
+  "lastName",
+  "phone",
+  "zip",
+  "email",
+  "consentToContact",
+];
+
+/** Radio-group `name` for each chip question. */
+const CHIP_NAMES = {
+  ageRange: "age_range",
+  bipolarDiagnosis: "bipolar_diagnosis",
+  diagnosisType: "diagnosis_type",
+  onMedication: "on_medication",
+} as const;
+
 function loadProgress(): Partial<PrescreenAnswers> | null {
   try {
     const raw = sessionStorage.getItem(RESUME_KEY);
@@ -163,8 +189,37 @@ const THANK_YOU_PATH = "/thank-you";
 
 export default function PrescreenForm() {
   const router = useRouter();
-  const [answers, setAnswers] = useState<PrescreenAnswers>(EMPTY_ANSWERS);
-  const [errors, setErrors] = useState<FormErrors>({});
+  const {
+    register,
+    control,
+    setValue,
+    getValues,
+    clearErrors,
+    handleSubmit,
+    formState: { errors: fieldErrors },
+  } = useForm<PrescreenInput, unknown, PrescreenAnswers>({
+    resolver: zodResolver(prescreenSchema),
+    defaultValues: EMPTY_ANSWERS,
+    // Same behavior as before: validate on submit; editing a field clears
+    // its error (no live re-validation while someone is still typing).
+    mode: "onSubmit",
+    // After the first submit, a field is checked again when the visitor
+    // leaves it (blur). We focus the first error ourselves (see onInvalid)
+    // because the chip questions are not registered inputs.
+    reValidateMode: "onBlur",
+    shouldFocusError: false,
+  });
+  const answers = useWatch({ control }) as PrescreenAnswers;
+  const errors = Object.fromEntries(
+    Object.entries(fieldErrors).map(([key, err]) => [key, err?.message]),
+  ) as Partial<Record<keyof PrescreenAnswers, string>>;
+  // Registration order = DOM order.
+  const firstNameField = register("firstName");
+  const lastNameField = register("lastName");
+  const phoneField = register("phone");
+  const zipField = register("zip");
+  const emailField = register("email");
+  const consentField = register("consentToContact");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -182,15 +237,16 @@ export default function PrescreenForm() {
     attribution.current = captureAttribution();
     startedAt.current = Date.now();
 
+    // sessionStorage is browser-only, so saved answers are restored on mount
+    // (seeding them during render would break hydration).
     const saved = loadProgress();
-    if (saved && Object.values(saved).some(Boolean)) {
-      // sessionStorage is browser-only, so this state cannot be seeded during
-      // render without breaking hydration — syncing on mount is the fix, not
-      // the smell the rule is usually pointing at.
-      /* eslint-disable-next-line react-hooks/set-state-in-effect */
-      setAnswers((prev) => ({ ...prev, ...saved }));
+    if (saved) {
+      for (const field of RESUME_FIELDS) {
+        const value = saved[field];
+        if (value) setValue(field, value as never);
+      }
     }
-  }, []);
+  }, [setValue]);
 
   useEffect(() => {
     const onLeave = () => {
@@ -207,10 +263,11 @@ export default function PrescreenForm() {
     if (submitted) headingRef.current?.focus();
   }, [submitted]);
 
-  const persist = (next: PrescreenAnswers) => {
+  const persist = () => {
+    const values = getValues();
     const clinical: Partial<PrescreenAnswers> = {};
     for (const field of RESUME_FIELDS) {
-      clinical[field] = next[field] as never;
+      clinical[field] = values[field] as never;
     }
     try {
       sessionStorage.setItem(RESUME_KEY, JSON.stringify(clinical));
@@ -219,35 +276,43 @@ export default function PrescreenForm() {
     }
   };
 
-  const set = <K extends keyof PrescreenAnswers>(key: K, value: PrescreenAnswers[K]) => {
+  /** Shared change bookkeeping: start tracking, clear this field's error. */
+  const touched = (key: keyof PrescreenAnswers) => {
     if (!hasStarted.current) {
       hasStarted.current = true;
       trackEvent("prescreen_started", { study: STUDY.protocol });
     }
-
-    setAnswers((prev) => {
-      const next = { ...prev, [key]: value };
-      persist(next);
-      return next;
-    });
-    setErrors((prev) => {
-      if (!prev[key]) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    if (fieldErrors[key]) clearErrors(key);
   };
 
-  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  /** Chip questions are not inputs react-hook-form can register directly. */
+  const set = <K extends keyof PrescreenInput>(key: K, value: PrescreenInput[K]) => {
+    touched(key);
+    setValue(key, value as never, { shouldDirty: true });
+    persist();
+  };
 
-    const formErrors = validateAnswers(answers);
-    if (Object.keys(formErrors).length > 0) {
-      setErrors(formErrors);
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  /** Move focus to the first invalid field, in on-screen order, so keyboard
+   *  and screen-reader users land right on the problem. */
+  const onInvalid = (invalid: Partial<Record<keyof PrescreenAnswers, unknown>>) => {
+    const first = FIELD_ORDER.find((key) => invalid[key]);
+    const form = formRef.current;
+    if (!first || !form) {
+      form?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+    const chipName = CHIP_NAMES[first as keyof typeof CHIP_NAMES];
+    const target = chipName
+      ? (form.querySelector<HTMLInputElement>(`input[name="${chipName}"]:checked`) ??
+        form.querySelector<HTMLInputElement>(`input[name="${chipName}"]`))
+      : form.querySelector<HTMLElement>(`[name="${first}"]`);
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    (target.closest("fieldset") ?? target).scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
+  /** Runs only when prescreenSchema passes (zodResolver). */
+  const onValid = async (answers: PrescreenAnswers) => {
     const triageResult = triage(answers);
     setSubmitting(true);
     setSubmitError(null);
@@ -369,7 +434,12 @@ export default function PrescreenForm() {
       </div>
       <p className="mt-2 text-[13px] text-muted">Takes about a minute. No obligation to participate.</p>
 
-      <form onSubmit={handleSubmit} noValidate className="mt-5">
+      <form
+        method="post"
+        onSubmit={(event) => void handleSubmit(onValid, onInvalid)(event)}
+        noValidate
+        className="mt-5"
+      >
         {/* Honeypot — hidden from people, tempting to bots. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
           <label htmlFor={`${uid}-company`}>Company</label>
@@ -457,10 +527,14 @@ export default function PrescreenForm() {
                   id={`${uid}-firstName`}
                   className={FIELD_CLASS}
                   autoComplete="given-name"
-                  value={answers.firstName}
+                  maxLength={NAME_MAX}
                   aria-invalid={errors.firstName ? true : undefined}
                   aria-describedby={errors.firstName ? `${uid}-first-error` : undefined}
-                  onChange={(e) => set("firstName", e.target.value)}
+                  {...firstNameField}
+                  onChange={(e) => {
+                    touched("firstName");
+                    void firstNameField.onChange(e);
+                  }}
                 />
                 <FieldError id={`${uid}-first-error`} message={errors.firstName} />
               </div>
@@ -472,10 +546,14 @@ export default function PrescreenForm() {
                   id={`${uid}-lastName`}
                   className={FIELD_CLASS}
                   autoComplete="family-name"
-                  value={answers.lastName}
+                  maxLength={NAME_MAX}
                   aria-invalid={errors.lastName ? true : undefined}
                   aria-describedby={errors.lastName ? `${uid}-last-error` : undefined}
-                  onChange={(e) => set("lastName", e.target.value)}
+                  {...lastNameField}
+                  onChange={(e) => {
+                    touched("lastName");
+                    void lastNameField.onChange(e);
+                  }}
                 />
                 <FieldError id={`${uid}-last-error`} message={errors.lastName} />
               </div>
@@ -519,10 +597,15 @@ export default function PrescreenForm() {
                   autoComplete="tel-national"
                   inputMode="tel"
                   placeholder="(813) 555-0123"
-                  value={answers.phone}
                   aria-invalid={errors.phone ? true : undefined}
                   aria-describedby={errors.phone ? `${uid}-phone-error` : undefined}
-                  onChange={(e) => set("phone", formatPhone(e.target.value))}
+                  {...phoneField}
+                  onChange={(e) => {
+                    touched("phone");
+                    // Mask as the user types or pastes: (404) 999-2734.
+                    e.target.value = formatPhone(e.target.value);
+                    void phoneField.onChange(e);
+                  }}
                 />
               </div>
               <FieldError id={`${uid}-phone-error`} message={errors.phone} />
@@ -539,10 +622,14 @@ export default function PrescreenForm() {
                   inputMode="numeric"
                   autoComplete="postal-code"
                   maxLength={5}
-                  value={answers.zip}
                   aria-invalid={errors.zip ? true : undefined}
                   aria-describedby={errors.zip ? `${uid}-zip-error` : undefined}
-                  onChange={(e) => set("zip", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                  {...zipField}
+                  onChange={(e) => {
+                    touched("zip");
+                    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 5);
+                    void zipField.onChange(e);
+                  }}
                 />
                 <FieldError id={`${uid}-zip-error`} message={errors.zip} />
               </div>
@@ -555,10 +642,14 @@ export default function PrescreenForm() {
                   className={FIELD_CLASS}
                   type="email"
                   autoComplete="email"
-                  value={answers.email}
+                  maxLength={EMAIL_MAX}
                   aria-invalid={errors.email ? true : undefined}
                   aria-describedby={errors.email ? `${uid}-email-error` : undefined}
-                  onChange={(e) => set("email", e.target.value)}
+                  {...emailField}
+                  onChange={(e) => {
+                    touched("email");
+                    void emailField.onChange(e);
+                  }}
                 />
                 <FieldError id={`${uid}-email-error`} message={errors.email} />
               </div>
@@ -582,10 +673,13 @@ export default function PrescreenForm() {
                 <input
                   type="checkbox"
                   className="mt-0.5 size-4 shrink-0 accent-indigo"
-                  checked={answers.consentToContact}
                   aria-invalid={errors.consentToContact ? true : undefined}
                   aria-describedby={errors.consentToContact ? `${uid}-consent-error` : undefined}
-                  onChange={(e) => set("consentToContact", e.target.checked)}
+                  {...consentField}
+                  onChange={(e) => {
+                    touched("consentToContact");
+                    void consentField.onChange(e);
+                  }}
                 />
                 <span>
                   I agree that {STUDY.siteName} may call, text, or email me

@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-import {
-  isValidEmail,
-  isValidPhone,
-  isValidZip,
-  triage,
-  type PrescreenAnswers,
-} from "@/lib/prescreen";
+import { prescreenSchema, triage, type PrescreenAnswers } from "@/lib/prescreen";
 import { STUDY } from "@/lib/study";
 import {
   addGhlNote,
@@ -113,48 +107,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const answers = (body.answers ?? {}) as PrescreenAnswers;
+  // Same schema as the browser form, so a request that skips the page
+  // (bots, scripts) gets exactly the same rules — including the 4 answers.
+  const parsed = prescreenSchema.safeParse(body.answers ?? {});
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid request." },
+      { status: 400 },
+    );
+  }
+  const answers: PrescreenAnswers = parsed.data;
   const attribution = (body.attribution ?? {}) as Record<string, unknown>;
   const eventId = str(body.event_id);
   const fbp = str(body.fbp);
   const fbcFromClient = str(body.fbc);
 
-  const firstName = str(answers.firstName);
-  const lastName = str(answers.lastName);
-  const phone = str(answers.phone);
-  const email = str(answers.email);
-  const zip = str(answers.zip);
-
-  if (!firstName || !lastName) {
-    return NextResponse.json(
-      { ok: false, error: "Please include your first and last name." },
-      { status: 400 },
-    );
-  }
-  if (!isValidPhone(phone)) {
-    return NextResponse.json(
-      { ok: false, error: "Please include a valid 10-digit phone number." },
-      { status: 400 },
-    );
-  }
-  if (!isValidEmail(email)) {
-    return NextResponse.json(
-      { ok: false, error: "Please include a valid email address." },
-      { status: 400 },
-    );
-  }
-  if (!isValidZip(zip)) {
-    return NextResponse.json(
-      { ok: false, error: "Please include a valid 5-digit ZIP code." },
-      { status: 400 },
-    );
-  }
-  if (!answers.consentToContact) {
-    return NextResponse.json(
-      { ok: false, error: "Consent to be contacted is required." },
-      { status: 400 },
-    );
-  }
+  const { firstName, lastName, phone, email, zip } = answers;
 
   if (
     !process.env.GOHIGHLEVEL_API_KEY?.trim() ||
